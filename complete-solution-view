@@ -16,7 +16,7 @@ GROUP BY s.customer_id
 ORDER BY total_spent DESC
 
   #### Answer:
-| Customer_id | Total_sales |
+| Customer_id | total_spent |
 | ----------- | ----------- |
 | A           | 76          |
 | B           | 74          |
@@ -33,22 +33,260 @@ ORDER BY customer_id
 ````
 
 #### Answer:
-| Customer_id | Times_visited |
+| Customer_id | number_of_days |
 | ----------- | ----------- |
 | A           | 4          |
 | B           | 6          |
 | C           | 2          |
 
 
+### 3. What was the first item from the menu purchased by each customer?
+
+````sql
+with ranking as(SELECT s.customer_id, m.product_name, s.order_date, RANK() OVER(PARTITION BY s.customer_id ORDER BY s.order_date) as ranks
+				FROM dannys_diner.sales s
+				INNER JOIN dannys_diner.menu m
+				ON s.product_id = m.product_id
+			    GROUP BY s.customer_id, m.product_name,s.order_date)
+				
+				SELECT customer_id, product_name
+				FROM ranking
+				WHERE ranks = 1
+````
+
+#### Answer:
+| Customer_id | product_name | 
+| ----------- | ----------- |
+| A           | curry        | 
+| A           | sushi        | 
+| B           | curry        | 
+| C           | ramen        |
+
+- Customer A's first order is curry and sushi.
+- Customer B's first order is curry.
+- Customer C's first order is ramen.
+
+### 4. What is the most purchased item on the menu and how many times was it purchased by all customers?
+
+````sql
+SELECT m.product_name, COUNT(s.product_id) AS count_of_purchase
+FROM dannys_diner.sales s
+JOIN dannys_diner.menu m
+ON s.product_id = m.product_id
+GROUP BY s.product_id, m.product_name
+ORDER BY count_of_purchase DESC
+LIMIT 1
+````
+
+#### Answer:
+| Product_name  | count_of_purchase | 
+| ----------- | ----------- |
+| ramen       | 8|
 
 
+- Most purchased item on the menu is ramen which is 8 times.
+
+***
+
+### 5. Which item was the most popular for each customer?
+
+````sql
+with popular_item as (SELECT s.customer_id, s.product_id, m.product_name, COUNT(s.product_id) AS number_of_purchase,
+					  RANK() OVER(PARTITION BY s.customer_id ORDER BY COUNT(s.product_id)DESC) AS ranks
+					FROM dannys_diner.sales s
+					JOIN dannys_diner.menu m
+					ON s.product_id = m.product_id
+					GROUP BY s.customer_id,s.product_id, m.product_name
+					ORDER BY s.customer_id)
+SELECT customer_id, product_name, number_of_purchase
+FROM popular_item
+WHERE ranks = 1	
+````
+
+#### Answer:
+| Customer_id | Product_name | number_of_purchase |
+| ----------- | ---------- |------------  |
+| A           | ramen        |  3   |
+| B           | sushi        |  2   |
+| B           | curry        |  2   |
+| B           | ramen        |  2   |
+| C           | ramen        |  3   |
+
+- Customer A and C's favourite item is ramen while customer B savours all items on the menu. 
+
+***
+
+### 6. Which item was purchased first by the customer after they became a member?
+
+````sql
+with ranking as(SELECT s.customer_id, me.product_name, s.product_id, m.join_date, s.order_date,
+				 RANK() OVER(PARTITION BY s.customer_id ORDER BY s.order_date) as ranks
+				 FROM dannys_diner.members m
+				 JOIN dannys_diner.sales s
+				 ON s.customer_id = m.customer_id
+				 JOIN dannys_diner.menu me
+				 ON s.product_id = me.product_id
+				 WHERE s.order_date >= m.join_date
+				)
+SELECT customer_id, product_name, order_date
+FROM ranking
+where ranks = 1
+````
 
 
+#### Answer:
+| customer_id |  product_name |order_date
+| ----------- | ----------  |----------  |
+| A           |  curry        |2021-01-07 |
+| B           |  sushi        |2021-01-11 |
+
+After becoming a member 
+- Customer A's first order was curry.
+- Customer B's first order was sushi.
+
+***
+
+### 7. Which item was purchased just before the customer became a member?
+
+````sql
+with ranking as (SELECT s.customer_id, me.product_name, s.product_id, m.join_date, s.order_date,
+				 RANK() OVER(PARTITION BY s.customer_id ORDER BY s.order_date DESC) as ranks
+				 FROM dannys_diner.members m
+				 JOIN dannys_diner.sales s
+				 ON s.customer_id = m.customer_id
+				 JOIN dannys_diner.menu me
+				 ON s.product_id = me.product_id
+				 WHERE s.order_date < m.join_date
+				 ORDER BY s.order_date, s.customer_id
+				)
+SELECT customer_id, product_name, order_date
+FROM ranking
+where ranks = 1
+````
+
+#### Answer:
+| customer_id |product_name |order_date  |
+| ----------- | ----------  |---------- |
+| A           |  sushi      |2021-01-01 | 
+| A           |  curry      |2021-01-01 | 
+| B           |   sushi     |2021-01-04 |
+
+Before becoming a member 
+- Customer A’s last order was sushi and curry.
+- Customer B’s last order wassushi.
+
+***
+
+### 8. What is the total items and amount spent for each member before they became a member?
+
+````sql
+with table_1 as (SELECT s.customer_id, me.product_name, s.product_id, m.join_date, s.order_date, me.price
+				 FROM dannys_diner.members m
+				 JOIN dannys_diner.sales s
+				 ON s.customer_id = m.customer_id
+				 JOIN dannys_diner.menu me
+				 ON s.product_id = me.product_id
+				 WHERE s.order_date < m.join_date
+				 )
+SELECT customer_id, COUNT(product_id) as total_items, SUM(price) as total_spent
+FROM table_1
+GROUP BY customer_id
+ORDER BY customer_id
+
+````
 
 
+#### Answer:
+| customer_id |total_items | total_spent |
+| ----------- | ---------- |----------  |
+| A           | 2 |  25       |
+| B           | 3 |  40       |
+
+Before becoming a member
+- Customer A spent $25 on 2 items.
+- Customer B spent $40 on 3 items.
+
+***
 
 
+### 9. If each $1 spent equates to 10 points and sushi has a 2x points multiplier — how many points would each customer have?
+
+````sql
+with point_table_1 as (SELECT s.customer_id, me.product_name, me.price, (me.price * 10) as points
+					   FROM dannys_diner.sales s
+					   FULL JOIN dannys_diner.members m
+					   ON s.customer_id = m.customer_id
+					   FULL JOIN dannys_diner.menu me
+					   ON s.product_id = me.product_id
+					   WHERE product_name != 'sushi'),					   
+
+     point_table_2 as (SELECT s.customer_id, me.product_name, me.price, (me.price * 20) as points_2
+					   FROM dannys_diner.sales s
+					   FULL JOIN dannys_diner.members m
+					   ON s.customer_id = m.customer_id
+					   FULL JOIN dannys_diner.menu me
+					   ON s.product_id = me.product_id
+					   WHERE product_name = 'sushi'),
+					   
+	 point_table_3 as (SELECT customer_id, SUM(points)
+					   FROM point_table_1
+					   GROUP BY customer_id
+					   UNION ALL
+					   SELECT customer_id, SUM(points_2)
+					   FROM point_table_2
+					   GROUP BY customer_id)
+					   
+					   SELECT customer_id, SUM(sum) as sum_of_points
+					   FROM point_table_3
+					   GROUP BY customer_id
+````
 
 
+#### Answer:
+| customer_id | sum_of_points | 
+| ----------- | -------|
+| A           | 860 |
+| B           | 940 |
+| C           | 360 |
+
+- Total points for customer A, B and C are 860, 940 and 360 respectivly.
+
+***
+
+### 10. In the first week after a customer joins the program (including their join date) they earn 2x points on all items, not just sushi — how many points do customer A and B have at the end of January?
+
+````sql
+WITH table_cte AS (
+  SELECT 
+    customer_id, 
+    join_date, 
+    join_date + 6 AS valid_date, 
+	'2021-01-31' AS last_date
+  FROM dannys_diner.members
+)
+
+SELECT 
+  s.customer_id, 
+  SUM(CASE WHEN m.product_name = 'sushi' THEN 2 * 10 * m.price
+    		WHEN s.order_date BETWEEN t.join_date AND t.valid_date THEN 2 * 10 * m.price
+    		ELSE 10 * m.price END) AS sum_points
+FROM dannys_diner.sales s
+JOIN table_cte AS t
+  ON s.customer_id = t.customer_id
+AND s.order_date <= '2021-01-31'
+JOIN dannys_diner.menu m
+  ON s.product_id = m.product_id
+GROUP BY s.customer_id;
+````
+
+#### Answer:
+| Customer_id | sum_of_points | 
+| ----------- | ---------- |
+| A           | 1370 |
+| B           | 820 |
+
+- Total points for Customer A and B are 1,370 and 820 respectivly.
+
+***
 
   
